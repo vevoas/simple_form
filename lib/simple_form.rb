@@ -47,6 +47,10 @@ module SimpleForm
   mattr_accessor :components
   @@components = [ :placeholder, :label_input, :hint, :error ]
 
+  # Components used by the form builder if the input type is a boolean.
+  mattr_accessor :boolean_components
+  @@boolean_components = [ :label_input, :hint, :error ]  
+
   # Series of attemps to detect a default label method for collection.
   mattr_accessor :collection_label_methods
   @@collection_label_methods = [ :to_label, :name, :title, :to_s ]

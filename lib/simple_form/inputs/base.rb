@@ -59,8 +59,15 @@ module SimpleForm
     protected
 
       def components_list
-        options[:components] || SimpleForm.components
+        if options[:components]
+          options[:components]
+        elsif input_type == :boolean
+          SimpleForm.boolean_components
+        else
+          SimpleForm.components
+        end
       end
+      
 
       def attribute_required?
         if !options[:required].nil?
