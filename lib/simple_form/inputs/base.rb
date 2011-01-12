@@ -62,8 +62,8 @@ module SimpleForm
           content.safe_concat send(:input).to_s
           content = content + '<div class="block">'.html_safe
           content.safe_concat send(:label).to_s
-          content.safe_concat send(:hint).to_s unless options[:hint] == false
           content.safe_concat send(:error).to_s unless options[:error] == false
+          content.safe_concat send(:hint).to_s unless options[:hint] == false
           content = content + '</div>'.html_safe
         else
           content.safe_concat send(:label).to_s
