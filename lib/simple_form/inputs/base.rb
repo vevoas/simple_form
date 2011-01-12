@@ -47,12 +47,33 @@ module SimpleForm
       end
 
       def render
+        
         content = "".html_safe
-        components_list.each do |component|
-          next if options[component] == false
-          rendered = send(component)
-          content.safe_concat rendered.to_s if rendered
+
+        #components_list.each do |component|
+        #  next if options[component] == false
+        #  content.safe_concat send(component).to_s
+        #end
+        
+        # CH AG - forced order of componants to allow for IE6 nonsence
+        # configuration file components lists are overridden
+        
+        if input_type == :boolean
+          content.safe_concat send(:input).to_s
+          content = content + '<div class="block">'.html_safe
+          content.safe_concat send(:label).to_s
+          content.safe_concat send(:hint).to_s unless options[:hint] == false
+          content.safe_concat send(:error).to_s unless options[:error] == false
+          content = content + '</div>'.html_safe
+        else
+          content.safe_concat send(:label).to_s
+          content = content + '<div class="block">'.html_safe
+          content.safe_concat send(:error).to_s unless options[:error] == false
+          content.safe_concat send(:hint).to_s unless options[:hint] == false
+          content.safe_concat send(:input).to_s
+          content = content + '</div>'.html_safe
         end
+
         wrap(content)
       end
 
