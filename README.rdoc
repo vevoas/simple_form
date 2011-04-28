@@ -127,17 +127,17 @@ SimpleForm accepts same options as their corresponding input type helper in Rail
     <%= f.button :submit %>
   <% end %>
 
-SimpleForm also allows you using label, hint and error helpers it provides:
+SimpleForm also allows you using label, hint, input_field and error helpers it provides:
 
   <%= simple_form_for @user do |f| %>
     <%= f.label :username %>
-    <%= f.text_field :username %>
+    <%= f.input_field :username %>
     <%= f.error :username, :id => 'user_name_error' %>
     <%= f.hint 'No special characters, please!' %>
     <%= f.submit 'Save' %>
   <% end %>
 
-Any extra option passed to label, hint or error will be rendered as html option.
+Any extra option passed to label, hint, input_field or error will be rendered as html option.
 
 === Collections
 
@@ -302,6 +302,30 @@ SimpleForm comes with a lot of default mappings:
   country               country select          string with name matching "country"
   time_zone             time zone select        string with name matching "time_zone"
 
+== Custom inputs
+
+It is very easy to add custom inputs to SimpleForm. For instance, if you want to add a custom input that extends the string one, you just need to add this file:
+
+    # app/inputs/currency_input.rb
+    class CurrencyInput < SimpleForm::Inputs::StringInput
+      def input
+        "$ #{super}".html_safe
+      end
+    end
+
+And use it in your views:
+
+    f.input :money, :as => :currency
+
+You can also redefine existing SimpleForm inputs by creating a new class with the same name. For instance, if you want to wrap date/time/datetime in a div, you can do:
+
+    # app/inputs/date_time_input.rb
+    class DateTimeInput < SimpleForm::Inputs::DateTimeInput
+      def input
+        "<div>#{super}</div>".html_safe
+      end
+    end
+
 == I18n
 
 SimpleForm uses all power of I18n API to lookup labels, hints and placeholders. To customize your forms you can create a locale file like this:
@@ -364,15 +388,50 @@ It's also possible to translate buttons, using Rails' built-in I18n support:
 
 There are other options that can be configured through I18n API, such as required text and boolean. Be sure to check our locale file or the one copied to your application after you run "rails generate simple_form:install".
 
+== HTML 5 Notice
+
+By default, simple_form will generate input field types and attributes that are supported in HTML5, but are considered
+invalid HTML for older document types HTML4 or XHTML1.0. The HTML5 extensions include the new field types such as email, number, search, url,
+tel, and the new attributes such as required, autofocus, maxlength, min, max, step.
+
+Most browsers will not care, but some of the newer ones, in particular Chrome 10, uses the required
+attribute to force an input into a field and will prevent form submission without it. Depending on the design of
+the site this may or may not be desired. In many cases it can break existing UI's.
+
+The following configuration option permits disabling all HTML5 extensions:
+
+  SimpleForm.use_html5 = false  # default is true
+
+Or you can use the following configuration to disable only the browser validation:
+
+  SimpleForm.disable_browser_validations = true  # default is false
+
+You can do this in the configuration block, generated in the following section.
+
 == Configuration
 
 SimpleForm has several configuration values. You can read and change them in the initializer created by SimpleForm, so if you haven't executed the command below yet, please do:
 
   rails generate simple_form:install
 
-== TODO
+== Custom form builder
 
-Please refer to TODO file.
+You can create a custom form builder that uses SimpleForm.
+
+Create a helper method that calls simple_form_for with a custom builder:
+
+  def custom_form_for(object, *args, &block)
+    options = args.extract_options!
+    simple_form_for(object, *(args << options.merge(:builder => CustomFormBuilder)), &block)
+  end
+
+Create a form builder class that inherits from SimpleForm::FormBuilder.
+
+  class CustomFormBuilder < SimpleForm::FormBuilder
+    def input(attribute_name, *args, &block)
+      super(attribute_name, *(args << { :input_html => { :class => 'custom' } }), &block)
+    end
+  end
 
 == Maintainers
 
@@ -381,4 +440,5 @@ Please refer to TODO file.
 
 == License
 
-MIT License. Copyright 2010 Plataforma Tecnologia. http://blog.plataformatec.com.br
+MIT License. Copyright 2011 Plataforma Tecnologia. http://blog.plataformatec.com.br
+

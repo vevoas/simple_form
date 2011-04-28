@@ -65,7 +65,7 @@ module SimpleForm
 
   # You can wrap each item in a collection of radio/check boxes with a tag, defaulting to none.
   mattr_accessor :item_wrapper_tag
-  @@item_wrapper_tag = nil
+  @@item_wrapper_tag = :span
 
   # You can wrap all inputs in a pre-defined tag. Default is a div.
   mattr_accessor :wrapper_tag
@@ -83,9 +83,27 @@ module SimpleForm
   mattr_accessor :label_text
   @@label_text = lambda { |label, required| "#{required} #{label}" }
 
+  # You can define the class to use on all labels. Default is nil.
+  mattr_accessor :label_class
+  @@label_class = nil
+
+  # You can define the class to use on all forms. Default is simple_form.
+  mattr_accessor :form_class
+  @@form_class = :simple_form
+
   # Whether attributes are required by default (or not).
   mattr_accessor :required_by_default
   @@required_by_default = true
+
+  # Tell browsers whether to use default HTML5 validations.
+  mattr_accessor :disable_browser_validations
+  @@disable_browser_validations = false
+
+  # Determines whether HTML5 types (:email, :url, :search, :tel) and attributes (e.g. required) are used
+  # or not. True by default.
+  # Having this on in non-HTML5 compliant sites can cause odd behavior in HTML5-aware browsers such as Chrome.
+  mattr_accessor :use_html5
+  @@use_html5 = true
 
   # Collection of methods to detect if a file type was given.
   mattr_accessor :file_methods
@@ -113,6 +131,14 @@ module SimpleForm
   # It is a small performance improvement if you are not using such features.
   mattr_accessor :translate
   @@translate = true
+
+  # Automatically discover new inputs in Rails' autoload path.
+  mattr_accessor :inputs_discovery
+  @@inputs_discovery = true
+
+  # Cache simple form inputs discovery
+  mattr_accessor :cache_discovery
+  @@cache_discovery = !Rails.env.development?
 
   # Default way to setup SimpleForm. Run rails generate simple_form:install
   # to create a fresh initializer with all configuration values.

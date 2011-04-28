@@ -33,14 +33,15 @@ module SimpleForm
         class_eval <<-METHOD, __FILE__, __LINE__
           def simple_#{helper}(record_or_name_or_array, *args, &block)
             options = args.extract_options!
-            options[:builder] = SimpleForm::FormBuilder
+            options[:builder] ||= SimpleForm::FormBuilder
             css_class = case record_or_name_or_array
               when String, Symbol then record_or_name_or_array.to_s
               when Array then dom_class(record_or_name_or_array.last)
               else dom_class(record_or_name_or_array)
             end
             options[:html] ||= {}
-            options[:html][:class] = "simple_form \#{css_class} \#{options[:html][:class]}".strip
+            options[:html][:novalidate] = SimpleForm.disable_browser_validations
+            options[:html][:class] = "\#{SimpleForm.form_class} \#{css_class} \#{options[:html][:class]}".strip
 
             with_custom_field_error_proc do
               #{helper}(record_or_name_or_array, *(args << options), &block)

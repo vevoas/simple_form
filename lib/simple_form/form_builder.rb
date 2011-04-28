@@ -5,13 +5,17 @@ module SimpleForm
     extend MapType
     include SimpleForm::Inputs
 
-    map_type :password, :text, :file,              :to => SimpleForm::Inputs::MappingInput
-    map_type :string, :email, :search, :tel, :url, :to => SimpleForm::Inputs::StringInput
-    map_type :integer, :decimal, :float,           :to => SimpleForm::Inputs::NumericInput
-    map_type :select, :radio, :check_boxes,        :to => SimpleForm::Inputs::CollectionInput
-    map_type :date, :time, :datetime,              :to => SimpleForm::Inputs::DateTimeInput
-    map_type :country, :time_zone,                 :to => SimpleForm::Inputs::PriorityInput
-    map_type :boolean,                             :to => SimpleForm::Inputs::BooleanInput
+    map_type :text, :file,                                    :to => SimpleForm::Inputs::MappingInput
+    map_type :string, :password, :email, :search, :tel, :url, :to => SimpleForm::Inputs::StringInput
+    map_type :integer, :decimal, :float,                      :to => SimpleForm::Inputs::NumericInput
+    map_type :select, :radio, :check_boxes,                   :to => SimpleForm::Inputs::CollectionInput
+    map_type :date, :time, :datetime,                         :to => SimpleForm::Inputs::DateTimeInput
+    map_type :country, :time_zone,                            :to => SimpleForm::Inputs::PriorityInput
+    map_type :boolean,                                        :to => SimpleForm::Inputs::BooleanInput
+
+    def self.discovery_cache
+      @discovery_cache ||= {}
+    end
 
     # Basic input helper, combines all components in the stack to generate
     # input html based on options the user define and some guesses through
@@ -85,11 +89,30 @@ module SimpleForm
       if block_given?
         SimpleForm::Inputs::BlockInput.new(self, attribute_name, column, input_type, options, &block).render
       else
-        klass = self.class.mappings[input_type] || self.class.const_get("#{input_type.to_s.camelize}Input")
-        klass.new(self, attribute_name, column, input_type, options).render
+        find_mapping(input_type).new(self, attribute_name, column, input_type, options).render
       end
     end
     alias :attribute :input
+
+    # Creates a input tag for the given attribute. All the given options
+    # are sent as :input_html.
+    #
+    # == Examples
+    #
+    #   simple_form_for @user do |f|
+    #     f.input_field :name
+    #   end
+    #
+    # This is the output html (only the input portion, not the form):
+    #
+    #     <input class="string required" id="user_name" maxlength="100"
+    #        name="user[name]" size="100" type="text" value="Carlos" />
+    #
+    def input_field(attribute_name, options={})
+      options[:input_html] = options.except(:as)
+      options.merge!(:components => [:input], :wrapper => false)
+      input(attribute_name, options)
+    end
 
     # Helper for dealing with association selects/radios, generating the
     # collection automatically. It's just a wrapper to input, so all options
@@ -191,6 +214,23 @@ module SimpleForm
       SimpleForm::Inputs::Base.new(self, attribute_name, column, input_type, options).error
     end
 
+    # Return the error but also considering its name. This is used
+    # when errors for a hidden field need to be shown.
+    #
+    # == Examples
+    #
+    #    f.full_error :token #=> <span class="error">Token is invalid</span>
+    #
+    def full_error(attribute_name, options={})
+      options[:error_prefix] ||= if object.class.respond_to?(:human_attribute_name)
+        object.class.human_attribute_name(attribute_name.to_s)
+      else
+        attribute_name.to_s.humanize
+      end
+
+      error(attribute_name, options)
+    end
+
     # Creates a hint tag for the given attribute. Accepts a symbol indicating
     # an attribute for I18n lookup or a string. All the given options are sent
     # as :hint_html.
@@ -260,47 +300,94 @@ module SimpleForm
     def default_input_type(attribute_name, column, options) #:nodoc:
       return options[:as].to_sym if options[:as]
       return :select             if options[:collection]
+      custom_type = find_custom_type(attribute_name.to_s) and return custom_type
 
       input_type = column.try(:type)
-
       case input_type
-        when :timestamp
-          :datetime
-        when :string, nil
-          match = case attribute_name.to_s
-            when /password/  then :password
-            when /time_zone/ then :time_zone
-            when /country/   then :country
-            when /email/     then :email
-            when /phone/     then :tel
-            when /url/       then :url
-            else
-              SimpleForm.input_mappings.find { |match, type|
-                attribute_name.to_s =~ match
-              }.try(:last) if SimpleForm.input_mappings
-          end
-
-          match || input_type || file_method?(attribute_name) || :string
+      when :timestamp
+        :datetime
+      when :string, nil
+        case attribute_name.to_s
+        when /password/  then :password
+        when /time_zone/ then :time_zone
+        when /country/   then :country
+        when /email/     then :email
+        when /phone/     then :tel
+        when /url/       then :url
         else
-          input_type
+          file_method?(attribute_name) ? :file : (input_type || :string)
+        end
+      else
+        input_type
       end
     end
 
-    # Checks if attribute is a file_method.
+    def find_custom_type(attribute_name) #:nodoc:
+      SimpleForm.input_mappings.find { |match, type|
+        attribute_name =~ match
+      }.try(:last) if SimpleForm.input_mappings
+    end
+
     def file_method?(attribute_name) #:nodoc:
       file = @object.send(attribute_name) if @object.respond_to?(attribute_name)
-      :file if file && SimpleForm.file_methods.any? { |m| file.respond_to?(m) }
+      file && SimpleForm.file_methods.any? { |m| file.respond_to?(m) }
     end
 
-    # Finds the database column for the given attribute
     def find_attribute_column(attribute_name) #:nodoc:
-      @object.column_for_attribute(attribute_name) if @object.respond_to?(:column_for_attribute)
+      if @object.respond_to?(:column_for_attribute)
+        @object.column_for_attribute(attribute_name)
+      end
     end
 
-    # Find reflection related to association
     def find_association_reflection(association) #:nodoc:
-      @object.class.reflect_on_association(association) if @object.class.respond_to?(:reflect_on_association)
+      if @object.class.respond_to?(:reflect_on_association)
+        @object.class.reflect_on_association(association)
+      end
     end
 
+    # Attempts to find a mapping. It follows the following rules:
+    #
+    # 1) It tries to find a registered mapping, if succeeds:
+    #    a) Try to find an alternative with the same name in the Object scope
+    #    b) Or use the found mapping
+    # 2) If not, fallbacks to #{input_type}Input
+    # 3) If not, fallbacks to SimpleForm::Inputs::#{input_type}
+    def find_mapping(input_type) #:nodoc:
+      discovery_cache[input_type] ||=
+        if mapping = self.class.mappings[input_type]
+          mapping_override(mapping) || mapping
+        else
+          camelized = "#{input_type.to_s.camelize}Input"
+          attempt_mapping(camelized, Object) || attempt_mapping(camelized, self.class) ||
+            raise("No input found for #{input_type}")
+        end
+    end
+
+    # If cache_discovery is enabled, use the class level cache that persists
+    # between requests, otherwise use the instance one.
+    def discovery_cache #:nodoc:
+      if SimpleForm.cache_discovery
+        self.class.discovery_cache
+      else
+        @discovery_cache ||= {}
+      end
+    end
+
+    def mapping_override(klass) #:nodoc:
+      name = klass.name
+      if name =~ /^SimpleForm::Inputs/
+        attempt_mapping name.split("::").last, Object
+      end
+    end
+
+    def attempt_mapping(mapping, at) #:nodoc:
+      return if SimpleForm.inputs_discovery == false && at == Object
+
+      begin
+        at.const_get(mapping)
+      rescue NameError => e
+        e.message =~ /#{mapping}$/ ? nil : raise
+      end
+    end
   end
 end

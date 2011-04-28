@@ -97,6 +97,13 @@ class InputTest < ActionView::TestCase
     assert_select 'select.datetime:not([autofocus])'
   end
 
+  test "when not using HTML5, it does not generate autofocus attribute" do
+    SimpleForm.use_html5 = false
+    with_input_for @user, :name, :string, :autofocus => true
+    assert_no_select 'input.string[autofocus]'
+    SimpleForm.use_html5 = true
+  end
+
   test 'input should render components according to an optional :components option' do
     with_input_for @user, :name, :string, :components => [:input, :label]
     assert_select 'input + label'
@@ -126,7 +133,12 @@ class InputTest < ActionView::TestCase
   # StringInput
   test 'input should map text field to string attribute' do
     with_input_for @user, :name, :string
-    assert_select 'input[name=\'user[name]\'][id=user_name][value=New in Simple Form!][type=text]'
+    assert_select "input#user_name[type=text][name='user[name]'][value=New in Simple Form!]"
+  end
+
+  test 'input should generate a password field for password attributes' do
+    with_input_for @user, :password, :password
+    assert_select "input#user_password.password[type=password][name='user[password]']"
   end
 
   test 'input should use default text size for decimal attributes' do
@@ -144,6 +156,23 @@ class InputTest < ActionView::TestCase
     assert_select 'input.string[size=50]'
   end
 
+  test 'input should use default text size for password attributes' do
+    with_input_for @user, :password, :password
+    assert_select 'input.password[type=password][size=50]'
+  end
+
+  test 'input should get maxlength from column definition for password attributes' do
+    with_input_for @user, :password, :password
+    assert_select 'input.password[type=password][maxlength=100]'
+  end
+
+  test 'when not using HTML5, does not show maxlength attribute' do
+    SimpleForm.use_html5 = false
+    with_input_for @user, :password, :password
+    assert_no_select 'input[type=password][maxlength]'
+    SimpleForm.use_html5 = true
+  end
+
   test 'input should not generate placeholder by default' do
     with_input_for @user, :name, :string
     assert_no_select 'input[placeholder]'
@@ -152,6 +181,11 @@ class InputTest < ActionView::TestCase
   test 'input should accept the placeholder option' do
     with_input_for @user, :name, :string, :placeholder => 'Put in some text'
     assert_select 'input.string[placeholder=Put in some text]'
+  end
+
+  test 'input should generate a password field for password attributes that accept placeholder' do
+    with_input_for @user, :password, :password, :placeholder => 'Password Confirmation'
+    assert_select 'input[type=password].password[placeholder=Password Confirmation]#user_password'
   end
 
   test 'input should use i18n to translate placeholder text' do
@@ -167,6 +201,14 @@ class InputTest < ActionView::TestCase
     test "input should allow type #{type}" do
       with_input_for @user, :name, type
       assert_select "input.string.#{type}"
+      assert_select "input[type=#{type}]"
+    end
+
+    test "input should not allow type #{type} if HTML5 compatibility is disabled" do
+      SimpleForm.use_html5 = false
+      with_input_for @user, :name, type
+      assert_no_select "input[type=#{type}]"
+      SimpleForm.use_html5 = true
     end
   end
 
@@ -204,6 +246,38 @@ class InputTest < ActionView::TestCase
     assert_select 'input[min=18]'
   end
 
+  test 'input should infer min value from integer attributes with greater than validation using symbol' do
+    with_input_for @validating_user, :amount, :float
+    assert_no_select 'input[min]'
+
+    with_input_for @validating_user, :amount, :integer
+    assert_select 'input[min=11]'
+  end
+
+  test 'input should infer min value from integer attributes with greater than or equal to validation using symbol' do
+    with_input_for @validating_user, :attempts, :float
+    assert_select 'input[min=1]'
+
+    with_input_for @validating_user, :attempts, :integer
+    assert_select 'input[min=1]'
+  end
+
+  test 'input should infer min value from integer attributes with greater than validation using proc' do
+    with_input_for @other_validating_user, :amount, :float
+    assert_no_select 'input[min]'
+
+    with_input_for @other_validating_user, :amount, :integer
+    assert_select 'input[min=20]'
+  end
+
+  test 'input should infer min value from integer attributes with greater than or equal to validation using proc' do
+    with_input_for @other_validating_user, :attempts, :float
+    assert_select 'input[min=19]'
+
+    with_input_for @other_validating_user, :attempts, :integer
+    assert_select 'input[min=19]'
+  end
+
   test 'input should infer max value from attributes with less than validation' do
     with_input_for @other_validating_user, :age, :float
     assert_no_select 'input[max]'
@@ -212,9 +286,41 @@ class InputTest < ActionView::TestCase
     assert_select 'input[max=99]'
   end
 
-  test 'input should infer step value only from integer attribute' do
+  test 'input should infer max value from attributes with less than validation using symbol' do
+    with_input_for @validating_user, :amount, :float
+    assert_no_select 'input[max]'
+
+    with_input_for @validating_user, :amount, :integer
+    assert_select 'input[max=99]'
+  end
+
+  test 'input should infer max value from attributes with less than or equal to validation using symbol' do
+    with_input_for @validating_user, :attempts, :float
+    assert_select 'input[max=100]'
+
+    with_input_for @validating_user, :attempts, :integer
+    assert_select 'input[max=100]'
+  end
+
+  test 'input should infer max value from attributes with less than validation using proc' do
+    with_input_for @other_validating_user, :amount, :float
+    assert_no_select 'input[max]'
+
+    with_input_for @other_validating_user, :amount, :integer
+    assert_select 'input[max=118]'
+  end
+
+  test 'input should infer max value from attributes with less than or equal to validation using proc' do
+    with_input_for @other_validating_user, :attempts, :float
+    assert_select 'input[max=119]'
+
+    with_input_for @other_validating_user, :attempts, :integer
+    assert_select 'input[max=119]'
+  end
+
+  test 'input should have step value of any except for integer attribute' do
     with_input_for @validating_user, :age, :float
-    assert_no_select 'input[step]'
+    assert_select 'input[step="any"]'
 
     with_input_for @validating_user, :age, :integer
     assert_select 'input[step=1]'
@@ -237,6 +343,24 @@ class InputTest < ActionView::TestCase
       with_input_for @user, :age, :integer
       assert_select 'input.integer[placeholder=Age goes here]'
     end
+  end
+
+  # Numeric input but HTML5 disabled
+  test ' when not using HTML5 input should not generate field with type number and use text instead' do
+    SimpleForm.use_html5 = false
+    with_input_for @user, :age, :integer
+    assert_no_select "input[type=number]"
+    assert_no_select "input#user_age[text]"
+    SimpleForm.use_html5 = true
+  end
+
+  test 'when not using HTML5 input should not use min or max or step attributes' do
+    SimpleForm.use_html5 = false
+    with_input_for @validating_user, :age, :integer
+    assert_no_select "input[min]"
+    assert_no_select "input[max]"
+    assert_no_select "input[step]"
+    SimpleForm.use_html5 = true
   end
 
   [:integer, :float, :decimal].each do |type|
@@ -269,22 +393,12 @@ class InputTest < ActionView::TestCase
     assert_select 'textarea.text[placeholder=Put in some text]'
   end
 
-  test 'input should generate a password field for password attributes' do
-    with_input_for @user, :password, :password
-    assert_select 'input[type=password].password#user_password'
-  end
-
-  test 'input should generate a password field for password attributes that accept placeholder' do
-    with_input_for @user, :password, :password, :placeholder => 'Password Confirmation'
-    assert_select 'input[type=password].password[placeholder=Password Confirmation]#user_password'
-  end
-
   test 'input should generate a file field' do
     with_input_for @user, :name, :file
     assert_select 'input#user_name[type=file]'
   end
 
-  test "input should generate a file field that don't accept placeholder" do
+  test "input should generate a file field that doesn't accept placeholder" do
     with_input_for @user, :name, :file, :placeholder => 'Put in some text'
     assert_no_select 'input[placeholder]'
   end
@@ -463,6 +577,13 @@ class InputTest < ActionView::TestCase
     end
   end
 
+  test 'input should mark the checked value when using boolean and radios' do
+    @user.active = false
+    with_input_for @user, :active, :radio
+    assert_no_select 'input[type=radio][value=true][checked]'
+    assert_select 'input[type=radio][value=false][checked]'
+  end
+
   test 'input should generate a boolean select with options by default for select types' do
     with_input_for @user, :active, :select
     assert_select 'select.select#user_active'
@@ -495,6 +616,13 @@ class InputTest < ActionView::TestCase
     @user.age = 18
     with_input_for @user, :age, :select, :collection => 18..60
     assert_select 'select option[selected=selected]', '18'
+  end
+
+  test 'input should mark the selected value when using booleans and select' do
+    @user.active = false
+    with_input_for @user, :active, :select
+    assert_no_select 'select option[selected][value=true]', 'Yes'
+    assert_select 'select option[selected][value=false]', 'No'
   end
 
   test 'input should set the correct value when using a collection that includes floats' do
@@ -606,6 +734,31 @@ class InputTest < ActionView::TestCase
     assert_select 'label.collection_radio', 'CARLOS'
   end
 
+  test 'input should allow overriding label and value method using a lambda for collection selects' do
+    with_input_for @user, :name, :select,
+                          :collection => ['Jose' , 'Carlos'],
+                          :label_method => lambda { |i| i.upcase },
+                          :value_method => lambda { |i| i.downcase }
+    assert_select 'select option[value=jose]', "JOSE"
+    assert_select 'select option[value=carlos]', "CARLOS"
+  end
+
+  test 'input should allow overriding only label but not value method using a lambda for collection select' do
+    with_input_for @user, :name, :select,
+                          :collection => ['Jose' , 'Carlos'],
+                          :label_method => lambda { |i| i.upcase }
+    assert_select 'select option[value=Jose]', "JOSE"
+    assert_select 'select option[value=Carlos]', "CARLOS"
+  end
+
+  test 'input should allow overriding only value but not label method using a lambda for collection select' do
+    with_input_for @user, :name, :select,
+                          :collection => ['Jose' , 'Carlos'],
+                          :value_method => lambda { |i| i.downcase }
+    assert_select 'select option[value=jose]', "Jose"
+    assert_select 'select option[value=carlos]', "Carlos"
+  end
+
   test 'input should allow symbols for collections' do
     with_input_for @user, :name, :select, :collection => [:jose, :carlos]
     assert_select 'select.select#user_name'
@@ -617,6 +770,14 @@ class InputTest < ActionView::TestCase
     with_input_for @user, :name, :radio, :collection => ['Jose' , 'Carlos']
     assert_select 'input[type=radio].required'
     assert_select 'input[type=radio][required]'
+  end
+
+  test 'when not using HTML5, collection input with radio type should not generate required html attribute' do
+    SimpleForm.use_html5 = false
+    with_input_for @user, :name, :radio, :collection => ['Jose' , 'Carlos']
+    assert_select 'input[type=radio].required'
+    assert_no_select 'input[type=radio][required]'
+    SimpleForm.use_html5 = true
   end
 
   test 'collection input with select type should not generate invalid required html attribute' do

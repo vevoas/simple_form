@@ -9,6 +9,12 @@ class FormBuilderTest < ActionView::TestCase
     end
   end
 
+  def with_custom_form_for(object, *args, &block)
+    with_concat_custom_form_for(object) do |f|
+      f.input(*args, &block)
+    end
+  end
+
   def with_button_for(object, *args)
     with_concat_form_for(object) do |f|
       f.button(*args)
@@ -18,6 +24,12 @@ class FormBuilderTest < ActionView::TestCase
   def with_error_for(object, *args)
     with_concat_form_for(object) do |f|
       f.error(*args)
+    end
+  end
+
+  def with_full_error_for(object, *args)
+    with_concat_form_for(object) do |f|
+      f.full_error(*args)
     end
   end
 
@@ -70,11 +82,27 @@ class FormBuilderTest < ActionView::TestCase
     end
   end
 
+  test 'builder should allow adding custom input mappings for integer input types' do
+    swap SimpleForm, :input_mappings => { /lock_version/ => :hidden } do
+      with_form_for @user, :lock_version
+      assert_no_select 'form input#user_lock_version.integer'
+      assert_select 'form input#user_lock_version.hidden'
+    end
+  end
+
   test 'builder uses the first matching custom input map when more than one match' do
     swap SimpleForm, :input_mappings => { /count$/ => :integer, /^post_/ => :password } do
       with_form_for @user, :post_count
       assert_no_select 'form input#user_post_count.password'
       assert_select 'form input#user_post_count.numeric.integer'
+    end
+  end
+
+  test 'builder uses the custom map only for matched attributes' do
+    swap SimpleForm, :input_mappings => { /lock_version/ => :hidden } do
+      with_form_for @user, :post_count
+      assert_no_select 'form input#user_post_count.hidden'
+      assert_select 'form input#user_post_count.string'
     end
   end
 
@@ -164,6 +192,14 @@ class FormBuilderTest < ActionView::TestCase
     assert_select 'form input#user_avatar.file'
   end
 
+  test 'builder should generate file for attributes that are real db columns but have file methods' do
+    @user.home_picture = mock("file")
+    @user.home_picture.expects(:respond_to?).with(:mounted_as).returns(true)
+
+    with_form_for @user, :home_picture
+    assert_select 'form input#user_home_picture.file'
+  end
+
   test 'build should generate select if a collection is given' do
     with_form_for @user, :age, :collection => 1..60
     assert_select 'form select#user_age.select'
@@ -184,6 +220,13 @@ class FormBuilderTest < ActionView::TestCase
   end
 
   # COMMON OPTIONS
+  test 'builder should add chosen form class' do
+    swap SimpleForm, :form_class => :my_custom_class do
+      with_form_for @user, :name
+      assert_select 'form.my_custom_class'
+    end
+  end
+
   test 'builder should allow passing options to input' do
     with_form_for @user, :name, :input_html => { :class => 'my_input', :id => 'my_input' }
     assert_select 'form input#my_input.my_input.string'
@@ -340,6 +383,43 @@ class FormBuilderTest < ActionView::TestCase
     assert_select 'form div.input.required.string.field_with_errors'
   end
 
+  # ONLY THE INPUT TAG
+  test "builder input_field should only render the input tag, nothing else" do
+    with_concat_form_for(@user) do |f|
+      f.input_field :name
+    end
+    assert_select 'form > input.required.string'
+    assert_no_select 'div.string'
+    assert_no_select 'label'
+    assert_no_select '.hint'
+  end
+
+  test 'builder input_field should allow overriding default input type' do
+    with_concat_form_for(@user) do |f|
+      f.input_field :name, :as => :text
+    end
+
+    assert_no_select 'input#user_name'
+    assert_select 'textarea#user_name.text'
+  end
+
+  test 'builder input_field should allow passing options to input tag' do
+    with_concat_form_for(@user) do |f|
+      f.input_field :name, :id => 'name_input', :class => 'name'
+    end
+
+    assert_select 'input.string.name#name_input'
+  end
+
+  test 'builder input_field should generate an input tag with a clean HTML' do
+    with_concat_form_for(@user) do |f|
+      f.input_field :name, :as => :integer, :class => 'name'
+    end
+
+    assert_no_select 'input.integer[input_html]'
+    assert_no_select 'input.integer[as]'
+  end
+
   # WITHOUT OBJECT
   test 'builder should generate properly when object is not present' do
     with_form_for :project, :name
@@ -379,6 +459,22 @@ class FormBuilderTest < ActionView::TestCase
   test 'builder should allow passing options to error tag' do
     with_error_for @user, :name, :id => 'name_error'
     assert_select 'span.error#name_error', "can't be blank"
+  end
+
+  # FULL ERRORS
+  test 'builder should generate an full error tag for the attribute' do
+    with_full_error_for @user, :name
+    assert_select 'span.error', "Super User Name! can't be blank"
+  end
+
+  test 'builder should generate an full  error tag with a clean HTML' do
+    with_full_error_for @user, :name
+    assert_no_select 'span.error[error_html]'
+  end
+
+  test 'builder should allow passing options to full error tag' do
+    with_full_error_for @user, :name, :id => 'name_error', :error_prefix => "Your name"
+    assert_select 'span.error#name_error', "Your name can't be blank"
   end
 
   # HINTS
@@ -582,5 +678,88 @@ class FormBuilderTest < ActionView::TestCase
 
     assert_select 'form ul', :count => 1
     assert_select 'form ul li', :count => 3
+  end
+
+  # CUSTOM FORM BUILDER
+  test 'custom builder should inherit mappings' do
+    with_custom_form_for @user, :email
+    assert_select 'form input[type=email]#user_email.custom'
+  end
+
+  test 'form with CustomMapTypeFormBuilder should use custom map type builder' do
+    with_concat_custom_mapping_form_for(:user) do |user|
+      assert user.instance_of?(CustomMapTypeFormBuilder)
+    end
+  end
+
+  test 'form with CustomMapTypeFormBuilder should use custom mapping' do
+    with_concat_custom_mapping_form_for(:user) do |user|
+      assert_equal SimpleForm::Inputs::StringInput, user.class.mappings[:custom_type]
+    end
+  end
+
+  test 'form without CustomMapTypeFormBuilder should not use custom mapping' do
+    with_concat_form_for(:user) do |user|
+      assert_nil user.class.mappings[:custom_type]
+    end
+  end
+
+  # DISCOVERY
+  # Setup new inputs and remove them after the test.
+  def discovery(value=false)
+    swap SimpleForm, :cache_discovery => value do
+      begin
+        load "discovery_inputs.rb"
+        yield
+      ensure
+        SimpleForm::FormBuilder.discovery_cache.clear
+        Object.send :remove_const, :StringInput
+        Object.send :remove_const, :NumericInput
+        Object.send :remove_const, :CustomizedInput
+      end
+    end
+  end
+
+  test 'builder should not discover new inputs if cached' do
+    with_form_for @user, :name
+    assert_select 'form input#user_name.string'
+
+    discovery(true) do
+      with_form_for @user, :name
+      assert_no_select 'form section input#user_name.string'
+    end
+  end
+
+  test 'builder should discover new inputs' do
+    discovery do
+      with_form_for @user, :name, :as => :customized
+      assert_select 'form section input#user_name.string'
+    end
+  end
+
+  test 'builder should not discover new inputs if discovery is off' do
+    with_form_for @user, :name
+    assert_select 'form input#user_name.string'
+
+    swap SimpleForm, :inputs_discovery => false do
+      discovery do
+        with_form_for @user, :name
+        assert_no_select 'form section input#user_name.string'
+      end
+    end
+  end
+
+  test 'builder should discover new inputs from mappings if not cached' do
+    discovery do
+      with_form_for @user, :name
+      assert_select 'form section input#user_name.string'
+    end
+  end
+
+  test 'builder should discover new inputs from internal fallbacks if not cached' do
+    discovery do
+      with_form_for @user, :age
+      assert_select 'form section input#user_age.numeric.integer'
+    end
   end
 end

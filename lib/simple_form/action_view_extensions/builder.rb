@@ -7,7 +7,9 @@ module SimpleForm
       # Create a collection of radio inputs for the attribute. Basically this
       # helper will create a radio input associated with a label for each
       # text/value option in the collection, using value_method and text_method
-      # to convert these text/value. Based on collection_select.
+      # to convert these text/value. You can give a symbol or a proc to both
+      # value_method and text_method, that will be evaluated for each item in
+      # the collection.
       #
       # == Examples
       #
@@ -37,14 +39,16 @@ module SimpleForm
         render_collection(
           attribute, collection, value_method, text_method, options, html_options
         ) do |value, text, default_html_options|
-          radio = radio_button(attribute, value, default_html_options)
-          collection_label(attribute, value, radio, text, :class => "collection_radio")
+          radio_button(attribute, value, default_html_options) +
+            label(sanitize_attribute_name(attribute, value), text, :class => "collection_radio")
         end
       end
 
-      # Creates a collection of check boxes for each item in the collection, associated
-      # with a clickable label. Use value_method and text_method to convert items in
-      # the collection for use as text/value in check boxes.
+      # Creates a collection of check boxes for each item in the collection,
+      # associated with a clickable label. Use value_method and text_method to
+      # convert items in the collection for use as text/value in check boxes.
+      # You can give a symbol or a proc to both value_method and text_method,
+      # that will be evaluated for each item in the collection.
       #
       # == Examples
       #
@@ -79,8 +83,8 @@ module SimpleForm
         ) do |value, text, default_html_options|
           default_html_options[:multiple] = true
 
-          check_box = check_box(attribute, default_html_options, value, '')
-          collection_label(attribute, value, check_box, text, :class => "collection_check_boxes")
+          check_box(attribute, default_html_options, value, '') +
+            label(sanitize_attribute_name(attribute, value), text, :class => "collection_check_boxes")
         end
       end
 
@@ -95,16 +99,15 @@ module SimpleForm
       #   end
       def simple_fields_for(*args, &block)
         options = args.extract_options!
-        options[:builder] = SimpleForm::FormBuilder
+        if self.class < ActionView::Helpers::FormBuilder
+          options[:builder] ||= self.class
+        else
+          options[:builder] ||= SimpleForm::FormBuilder
+        end
         fields_for(*(args << options), &block)
       end
 
     private
-
-      # Wraps the given component in a label, for better accessibility with collections.
-      def collection_label(attribute, value, component_tag, label_text, html_options) #:nodoc:
-        label(sanitize_attribute_name(attribute, value), component_tag << label_text.to_s, html_options)
-      end
 
       # Generate default options for collection helpers, such as :checked and
       # :disabled.
@@ -154,4 +157,25 @@ module SimpleForm
   end
 end
 
-ActionView::Helpers::FormBuilder.send :include, SimpleForm::ActionViewExtensions::Builder
+class ActionView::Helpers::FormBuilder
+  include SimpleForm::ActionViewExtensions::Builder
+
+  # Override default Rails collection_select helper to handle lambdas/procs in
+  # text and value methods, so it works the same way as collection_radio and
+  # collection_check_boxes in SimpleForm. If none of text/value methods is a
+  # callable object, then it just delegates back to original collection select.
+  #
+  alias :original_collection_select :collection_select
+  def collection_select(attribute, collection, value_method, text_method, options={}, html_options={})
+    if value_method.respond_to?(:call) || text_method.respond_to?(:call)
+      collection = collection.map do |item|
+        value = value_for_collection(item, value_method)
+        text  = value_for_collection(item, text_method)
+        [value, text]
+      end
+      value_method, text_method = :first, :last
+    end
+
+    original_collection_select(attribute, collection, value_method, text_method, options, html_options)
+  end
+end
