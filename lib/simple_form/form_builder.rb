@@ -154,7 +154,7 @@ module SimpleForm
 
       attribute = case reflection.macro
         when :belongs_to, :referenced_in, :embedded_in
-          reflection.options[:foreign_key] || :"#{reflection.name}_id"
+          :"#{reflection.foreign_key}" || :"#{reflection.name}_id"
         when :has_one
           raise ":has_one association are not supported by f.association"
         when :embeds_many
