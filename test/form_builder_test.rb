@@ -585,6 +585,36 @@ class FormBuilderTest < ActionView::TestCase
     end
   end
 
+  test 'builder preloads collection association' do
+    value = @user.tags
+    value.expects(:to_a).returns(value)
+    with_association_for @user, :tags
+    assert_select 'form select.select#user_tag_ids'
+    assert_select 'form select option[value=1]', 'Tag 1'
+    assert_select 'form select option[value=2]', 'Tag 2'
+    assert_select 'form select option[value=3]', 'Tag 3'
+  end
+
+  test 'builder does not preload collection association if preload false' do
+    value = @user.company
+    value.expects(:to_a).never
+    with_association_for @user, :company, :preload => false
+    assert_select 'form select.select#user_company_id'
+    assert_select 'form select option[value=1]', 'Company 1'
+    assert_select 'form select option[value=2]', 'Company 2'
+    assert_select 'form select option[value=3]', 'Company 3'
+  end
+
+  test 'builder does not preload non collection association' do
+    value = @user.company
+    value.expects(:to_a).never
+    with_association_for @user, :company, :preload => false
+    assert_select 'form select.select#user_company_id'
+    assert_select 'form select option[value=1]', 'Company 1'
+    assert_select 'form select option[value=2]', 'Company 2'
+    assert_select 'form select option[value=3]', 'Company 3'
+  end
+
   # ASSOCIATIONS - BELONGS TO
   test 'builder creates a select for belongs_to associations' do
     with_association_for @user, :company

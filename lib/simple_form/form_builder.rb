@@ -156,6 +156,7 @@ module SimpleForm
         when :belongs_to, :referenced_in, :embedded_in
           :"#{reflection.foreign_key}" || :"#{reflection.name}_id"
         when :has_one
+
           raise ":has_one association are not supported by f.association"
         when :embeds_many
           attribute = :"#{@reflection.name.to_s.pluralize}"
@@ -167,11 +168,18 @@ module SimpleForm
             :"#{@reflection.name.to_s.pluralize}"
         when :references_one
             attribute = :"#{@reflection.name.to_s.singularize}_id"
+
         else
           if options[:as] == :select
             html_options = options[:input_html] ||= {}
             html_options[:size]   ||= 5
             html_options[:multiple] = true unless html_options.key?(:multiple)
+          end
+
+          # Force the association to be preloaded for performance.
+          if options[:preload] != false && object.respond_to?(association)
+            target = object.send(association)
+            target.to_a if target.respond_to?(:to_a)
           end
 
           :"#{reflection.name.to_s.singularize}_ids"
@@ -351,7 +359,7 @@ module SimpleForm
     #    a) Try to find an alternative with the same name in the Object scope
     #    b) Or use the found mapping
     # 2) If not, fallbacks to #{input_type}Input
-    # 3) If not, fallbacks to SimpleForm::Inputs::#{input_type}
+    # 3) If not, fallbacks to SimpleForm::Inputs::#{input_type}Input
     def find_mapping(input_type) #:nodoc:
       discovery_cache[input_type] ||=
         if mapping = self.class.mappings[input_type]

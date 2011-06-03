@@ -30,7 +30,7 @@ module SimpleForm
         @input_html_options = html_options_for(:input, input_html_classes).tap do |o|
           o[:required]  = true if has_required? # Don't make this conditional on HTML5 here, because we want the CSS class to be set
           o[:disabled]  = true if disabled?
-          o[:autofocus] = true if has_autofocus? && SimpleForm.use_html5
+          o[:autofocus] = true if has_autofocus? && SimpleForm.html5
         end
       end
 
@@ -102,7 +102,7 @@ module SimpleForm
 
       # Whether this input is valid for HTML 5 required attribute.
       def has_required?
-        attribute_required? && SimpleForm.use_html5
+        attribute_required? && SimpleForm.html5 && SimpleForm.browser_validations
       end
 
       def has_autofocus?
@@ -197,7 +197,8 @@ module SimpleForm
         I18n.t(lookups.shift, :scope => :"simple_form.#{namespace}", :default => lookups).presence
       end
 
-      # Extract the model names from the object_name mess.
+      # Extract the model names from the object_name mess, ignoring numeric and
+      # explicit child indexes.
       #
       # Example:
       #
@@ -205,9 +206,10 @@ module SimpleForm
       # ["route", "blocks", "blocks_learning_object", "foo"]
       #
       def lookup_model_names
-        object_name.to_s.scan(/([a-zA-Z_]+)/).flatten.map do |x|
-          x.gsub('_attributes', '')
-        end
+        child_index = @builder.options[:child_index]
+        names = object_name.to_s.scan(/([a-zA-Z_]+)/).flatten
+        names.delete(child_index) if child_index
+        names.each { |name| name.gsub!('_attributes', '') }
       end
 
       # The action to be used in lookup.

@@ -133,6 +133,25 @@ class LabelTest < ActionView::TestCase
     end
   end
 
+  test 'label should do correct i18n lookup for nested has_many models with no nested translation' do
+    @user.tags = [Tag.new(1, 'Empresa')]
+
+    store_translations(:en, :simple_form => { :labels => {
+      :user => { :name => 'Usuario' },
+      :tags => { :name => 'Nome da empresa' }
+    } } ) do
+      with_concat_form_for @user do |f|
+        concat f.input :name
+        concat(f.simple_fields_for(:tags, :child_index => "new_index") do |tags_form|
+          concat(tags_form.input :name)
+        end)
+      end
+
+      assert_select 'label[for=user_name]', /Usuario/
+      assert_select 'label[for=user_tags_attributes_new_index_name]', /Nome da empresa/
+    end
+  end
+
   test 'label should have css class from type' do
     with_label_for @user, :name, :string
     assert_select 'label.string'

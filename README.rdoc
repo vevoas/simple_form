@@ -127,17 +127,18 @@ SimpleForm accepts same options as their corresponding input type helper in Rail
     <%= f.button :submit %>
   <% end %>
 
-SimpleForm also allows you using label, hint, input_field and error helpers it provides:
+SimpleForm also allows you to use label, hint, input_field, error and full_error helpers it provides (please take a look at the rdocs for each method for more info):
 
   <%= simple_form_for @user do |f| %>
     <%= f.label :username %>
     <%= f.input_field :username %>
-    <%= f.error :username, :id => 'user_name_error' %>
     <%= f.hint 'No special characters, please!' %>
+    <%= f.error :username, :id => 'user_name_error' %>
+    <%= f.full_error :token %>
     <%= f.submit 'Save' %>
   <% end %>
 
-Any extra option passed to label, hint, input_field or error will be rendered as html option.
+Any extra option passed to these methods will be rendered as html option.
 
 === Collections
 
@@ -157,7 +158,7 @@ Collection inputs accepts two other options beside collections:
 
 * value_method => the value method to be applied to the collection to retrieve the value
 
-Those methods are useful to manipulate the given collection. Both of these options also except lambda/procs incase you want to calculate the value or label in a special way eg. custom translation. All other options given are sent straight to the underlying helper. For example, you can give prompt as:
+Those methods are useful to manipulate the given collection. Both of these options also except lambda/procs in case you want to calculate the value or label in a special way eg. custom translation. All other options given are sent straight to the underlying helper. For example, you can give prompt as:
 
   f.input :age, :collection => 18..60, :prompt => "Select your age"
 
@@ -231,6 +232,16 @@ All web forms need buttons, right? SimpleForm wraps them in the DSL, acting like
 
 The above will simply call submit. You choose to use it or not, it's just a question of taste.
 
+== Wrapping Rails Form Helpers
+
+Say you wanted to use a rails form helper but still wrap it in SimpleForm goodness? You can, by calling input with a block like so:
+
+  <%= f.input :role do %>
+    <%= f.select :role, Role.all.map { |r| [r.name, r.id, { :class => r.company.id }] }, :include_blank => true %>
+  <% end %>
+
+In the above example, we're taking advantage of Rails 3's select method that allows us to pass in a hash of additional attributes for each option.
+
 == Extra helpers
 
 SimpleForm also comes with some extra helpers you can use inside rails default forms without relying on simple_form_for helper. They are listed below.
@@ -274,6 +285,13 @@ Creates a collection of check boxes with labels associated (same API as collecti
   <input id="user_options_false" name="user[options][]" type="checkbox" value="false" />
   <label class="collection_check_box" for="user_options_false">No</label>
 
+To use this with associations in your model, you can do the following:
+
+  form_for @user do |f|
+    f.collection_check_boxes :role_ids, Role.all, :id, :name # using :roles here is not going to work.
+  end
+
+
 == Mappings/Inputs available
 
 SimpleForm comes with a lot of default mappings:
@@ -307,9 +325,9 @@ SimpleForm comes with a lot of default mappings:
 It is very easy to add custom inputs to SimpleForm. For instance, if you want to add a custom input that extends the string one, you just need to add this file:
 
     # app/inputs/currency_input.rb
-    class CurrencyInput < SimpleForm::Inputs::StringInput
+    class CurrencyInput < SimpleForm::Inputs::Base
       def input
-        "$ #{super}".html_safe
+        "$ #{@builder.text_field(attribute_name, input_html_options)}".html_safe
       end
     end
 
@@ -325,6 +343,26 @@ You can also redefine existing SimpleForm inputs by creating a new class with th
         "<div>#{super}</div>".html_safe
       end
     end
+
+== Custom form builder
+
+You can create a custom form builder that uses SimpleForm.
+
+Create a helper method that calls simple_form_for with a custom builder:
+
+  def custom_form_for(object, *args, &block)
+    options = args.extract_options!
+    simple_form_for(object, *(args << options.merge(:builder => CustomFormBuilder)), &block)
+  end
+
+Create a form builder class that inherits from SimpleForm::FormBuilder.
+
+  class CustomFormBuilder < SimpleForm::FormBuilder
+    def input(attribute_name, options = {}, &block)
+      options[:input_html].merge! :class => 'custom'
+      super
+    end
+  end
 
 == I18n
 
@@ -390,23 +428,21 @@ There are other options that can be configured through I18n API, such as require
 
 == HTML 5 Notice
 
-By default, simple_form will generate input field types and attributes that are supported in HTML5, but are considered
-invalid HTML for older document types HTML4 or XHTML1.0. The HTML5 extensions include the new field types such as email, number, search, url,
-tel, and the new attributes such as required, autofocus, maxlength, min, max, step.
+By default, SimpleForm will generate input field types and attributes that are supported in HTML5, but are considered invalid HTML for older document types such as HTML4 or XHTML1.0. The HTML5 extensions include the new field types such as email, number, search, url, tel, and the new attributes such as required, autofocus, maxlength, min, max, step.
 
-Most browsers will not care, but some of the newer ones, in particular Chrome 10, uses the required
-attribute to force an input into a field and will prevent form submission without it. Depending on the design of
-the site this may or may not be desired. In many cases it can break existing UI's.
+Most browsers will not care, but some of the newer ones - in particular Chrome 10+ - use the required attribute to force a value into an input and will prevent form submission without it. Depending on the design of the application this may or may not be desired. In many cases it can break existing UI's.
 
-The following configuration option permits disabling all HTML5 extensions:
+It is possible to disable all HTML 5 extensions in SimpleForm with the following configuration:
 
-  SimpleForm.use_html5 = false  # default is true
+  SimpleForm.html5 = false # default is true
 
-Or you can use the following configuration to disable only the browser validation:
+If you want to have all other HTML 5 features, such as the new field types, you can disable only the browser validation:
 
-  SimpleForm.disable_browser_validations = true  # default is false
+  SimpleForm.browser_validations = false # default is true
 
-You can do this in the configuration block, generated in the following section.
+This option adds a new `novalidate` property to the form, instructing it to skip all HTML 5 validation. The inputs will still be generated with the required and other attributes, that might help you to use some generic javascript validation.
+
+Please notice that any of the configurations above will disable the `placeholder` component, which is an HTML 5 feature. We believe most of the newest browsers are handling this attribute fine, and if they aren't, any plugin you use would take of using the placeholder attribute to do it. However, you can disable it if you want, by removing the placeholder component from the components list in SimpleForm configuration file.
 
 == Configuration
 
@@ -414,29 +450,11 @@ SimpleForm has several configuration values. You can read and change them in the
 
   rails generate simple_form:install
 
-== Custom form builder
-
-You can create a custom form builder that uses SimpleForm.
-
-Create a helper method that calls simple_form_for with a custom builder:
-
-  def custom_form_for(object, *args, &block)
-    options = args.extract_options!
-    simple_form_for(object, *(args << options.merge(:builder => CustomFormBuilder)), &block)
-  end
-
-Create a form builder class that inherits from SimpleForm::FormBuilder.
-
-  class CustomFormBuilder < SimpleForm::FormBuilder
-    def input(attribute_name, *args, &block)
-      super(attribute_name, *(args << { :input_html => { :class => 'custom' } }), &block)
-    end
-  end
-
 == Maintainers
 
-* José Valim (http://github.com/josevalim)
-* Carlos Antonio da Silva (http://github.com/carlosantoniodasilva)
+* José Valim (https://github.com/josevalim)
+* Carlos Antonio da Silva (https://github.com/carlosantoniodasilva)
+* Rafael Mendonça França (https://github.com/rafaelfranca)
 
 == License
 
